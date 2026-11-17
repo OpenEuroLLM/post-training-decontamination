@@ -1,5 +1,7 @@
 import unittest
-from unittest.mock import patch
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import Mock, patch
 
 from datasets import Dataset
 
@@ -10,7 +12,7 @@ from decontamination.ds.config import (
     expand_benchmarks,
     expand_datasets,
 )
-from decontamination.ds.search import _prompt_text, read_dataset
+from decontamination.ds.search import _prompt_text, read_dataset, search
 
 
 class ScanConfigTest(unittest.TestCase):
@@ -53,3 +55,20 @@ class ScanConfigTest(unittest.TestCase):
         }])
         rows = read_dataset("example/repo", "fr", "test", query_fields=["conversation"], is_chat=True)
         self.assertEqual(rows[0]["conversation"], "First\nSecond")
+
+    @patch("decontamination.ds.search.ngram_match", return_value=([0], [], {}))
+    @patch("decontamination.ds.search.read_dataset")
+    @patch("decontamination.ds.search.create_es_connection")
+    def test_expanded_search_resumes_only_at_same_hit_limit(self, connect, load, match):
+        connect.return_value = Mock()
+        connect.return_value.count.return_value = {"count": 1}
+        load.return_value = Dataset.from_dict({"question": ["fixture"]})
+        dataset = DatasetConfig("local", None, "example/data", ["a", "b"], "train")
+        benchmark = BenchmarkConfig(
+            "fixture", None, "example/eval", ["en"], ["test", "validation"],
+            None, ["question"],
+        )
+        with TemporaryDirectory() as directory:
+            for hit_limit, calls in [(10, 4), (10, 4), (25, 8)]:
+                search([dataset], [benchmark], top_k=hit_limit, output_dir=Path(directory))
+                self.assertEqual(match.call_count, calls)

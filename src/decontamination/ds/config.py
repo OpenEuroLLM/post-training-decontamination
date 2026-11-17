@@ -160,25 +160,28 @@ class Result(TypedRow["Result"]):
     top_k: int | None = None
 
     def from_row(row: pd.Series) -> "Result":
-        dataset_query_filter = row.pop("dataset_query_filter")
+        values = {
+            key: None if pd.api.types.is_scalar(value) and pd.isna(value) else value
+            for key, value in row.items()
+        }
+        dataset_query_filter = values.pop("dataset_query_filter")
         dataset_query_filter = (
             literal_eval(dataset_query_filter)
             if isinstance(dataset_query_filter, str)
             else dataset_query_filter
         )
-        benchmark_query_fields = row.pop("benchmark_query_fields")
+        benchmark_query_fields = values.pop("benchmark_query_fields")
         benchmark_query_fields = (
             literal_eval(benchmark_query_fields)
             if isinstance(benchmark_query_fields, str)
             else benchmark_query_fields
         )
-        contaminated_ids = row.pop("contaminated_ids")
+        contaminated_ids = values.pop("contaminated_ids")
         contaminated_ids = (
             literal_eval(contaminated_ids)
             if isinstance(contaminated_ids, str)
             else contaminated_ids
         )
-        values = row.where(row.notna(), None).to_dict()
         return Result(
             dataset_query_filter=dataset_query_filter,
             benchmark_query_fields=benchmark_query_fields,
