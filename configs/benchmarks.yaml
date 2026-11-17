@@ -4,6 +4,7 @@
 - display_name: MATH500
   description: "A curated subset of 500 highly challenging competition math problems."
   path: HuggingFaceH4/MATH-500
+  revision: 6e4ed1a2a79af7d8630a6b768ec859cb5af4d3be
   subset: default
   split: test
   data_files: null
@@ -13,6 +14,7 @@
 - display_name: AIME24
   description: "Problems from the 2024 American Invitational Mathematics Examination."
   path: HuggingFaceH4/aime_2024
+  revision: 2fe88a2f1091d5048c0f36abc874fb997b3dd99a
   subset: default
   split: train
   data_files: null
@@ -22,6 +24,7 @@
 - display_name: AIME25
   description: "Problems from the 2025 American Invitational Mathematics Examination."
   path: math-ai/aime25
+  revision: 563bb8404243c5f09de6ec262f2db674fe5bce9b
   subset: default
   split: test
   data_files: null
@@ -31,6 +34,7 @@
 - display_name: AMC23
   description: "Problems from the 2023 American Mathematics Competitions (10/12)."
   path: math-ai/amc23
+  revision: 80815d37005feb82cd7f8fbc6901d5d3eff43057
   subset: default
   split: test
   data_files: null
@@ -40,6 +44,7 @@
 - display_name: JEEBench
   description: "Rigorous physics, chemistry, and math problems from the Indian JEE exams."
   path: daman1209arora/jeebench
+  revision: d070d1113ce365df05903763a2017ec2d0d56118
   subset: default
   split: test
   data_files: null
@@ -49,9 +54,10 @@
 ###############################################################################
 # Hard Science & General Knowledge
 ###############################################################################
-- display_name: GPQADiamond
+- display_name: GPQA-Diamond
   description: "A highly difficult dataset of PhD-level questions in biology, physics, and chemistry."
   path: Idavidrein/gpqa
+  revision: 83022cefff930aea54f654c0b282e74b9eeda5c6
   subset: gpqa_diamond
   split: train
   data_files: null
@@ -61,9 +67,10 @@
 ###############################################################################
 # Coding & Development
 ###############################################################################
-- display_name: LiveCodeBench
+- display_name: LiveCodeBench-v6
   description: "Continuously updated LeetCode-style programming problems to prevent overfitting."
   path: ali-elganzory/livecodebench-code_generation_lite
+  revision: 58bdac7537c0d0d4256dfd88ca7c655629b1fe91
   subset: release_v6
   split: test
   data_files: null
@@ -73,6 +80,7 @@
 - display_name: HumanEval
   description: "OpenAI's standard baseline for Python code generation and logic."
   path: openai/openai_humaneval
+  revision: 7dce6050a7d6d172f3cc5c32aa97f52fa1a2e544
   subset: openai_humaneval
   split: test
   data_files: null
@@ -82,8 +90,13 @@
 - display_name: MBPP
   description: "Mostly Basic Python Problems, containing nearly 1,000 crowd-sourced entry-level programming tasks."
   path: google-research-datasets/mbpp
+  revision: 4bb6404fdc6cacfda99d4ac4205087b89d32030c
   subset: full
-  split: train+test+validation+prompt
+  split:
+    - train
+    - test
+    - validation
+    - prompt
   data_files: null
   query_fields:
     - text
@@ -94,7 +107,22 @@
 - display_name: IFEval
   description: "Evaluates strict adherence to verifiable formatting constraints (e.g., word counts, specific formatting)."
   path: google/IFEval
+  revision: 966cd89545d6b6acfd7638bc708b98261ca58e84
   subset: default
+  split: train
+  data_files: null
+  query_fields:
+    - prompt
+
+- display_name: M-IFEval
+  description: "Multilingual instruction-following evaluation."
+  path: jbross-ibm-research/M-IFEval
+  revision: 07d24b2d75587c843d2dbec54340ca4088783b19
+  subset:
+    - en
+    - es
+    - fr
+    - ja
   split: train
   data_files: null
   query_fields:
@@ -105,16 +133,101 @@
   path: tatsu-lab/alpaca_eval
   subset: alpaca_eval
   split: eval
-  data_files: null
+  revision: 2edc6fad8be6b14ea7230aabfd08188da6b8b814
+  data_files:
+    - alpaca_eval.json
   query_fields:
     - instruction
 
 - display_name: Arena-Hard-v2.0
   description: "Complex, multi-turn user queries designed to test frontier-level conversational capabilities."
   path: lmarena-ai/arena-hard-auto
+  revision: 15f3746e21432264ce9b453999bde4f3c946d2e6
   subset: default
   split: train
   data_files:
     - data/arena-hard-v2.0/question.jsonl
   query_fields:
     - prompt
+
+- display_name: m-Arena-Hard-v2.0
+  description: "Multilingual translations of Arena-Hard v2.0 prompts."
+  path: CohereLabs/m-ArenaHard-v2.0
+  revision: 24c65eff42cec85e30dd5db99d1a702c7ebaa8ab
+  subset:
+    - ar
+    - cs
+    - de
+    - el
+    - en
+    - es
+    - fa
+    - fr
+    - he
+    - hi
+    - id
+    - it
+    - ja
+    - ko
+    - nl
+    - pl
+    - pt
+    - ro
+    - ru
+    - tr
+    - uk
+    - vi
+    - zh
+  split: test
+  data_files: null
+  query_fields:
+    - prompt
+
+# Human preference & chat.
+- display_name: ComparIA
+  description: "User prompts from ComparIA conversations with human preference votes."
+  path: ministere-culture/comparia-votes
+  revision: 7a40bce496c1f2aa3be4001da85a49cb4743042b
+  subset: default
+  split: train
+  data_files:
+    - votes.parquet
+  is_chat: true
+  query_fields:
+    - conversation_a
+
+- display_name: LMArena-55k
+  description: "User prompts from the 55K release of LMArena human preference data."
+  path: lmarena-ai/arena-human-preference-55k
+  revision: 18c298340948c0e7f7727399fd459cca6ce0ca6f
+  subset: default
+  split: train
+  data_files:
+    - train.csv
+  is_chat: false
+  query_fields:
+    - prompt
+
+- display_name: LMArena-100k
+  description: "User prompts from conversations in the 100K release of LMArena human preference data."
+  path: lmarena-ai/arena-human-preference-100k
+  revision: 72e85b3ddc9c81bf7b659d6b03d4126dfd8fb34a
+  subset: default
+  split: train
+  data_files:
+    - data/*.parquet
+  is_chat: true
+  query_fields:
+    - conversation_a
+
+- display_name: LMArena-140k
+  description: "User prompts from conversations in the 140K release of LMArena human preference data."
+  path: lmarena-ai/arena-human-preference-140k
+  revision: 6322995ab34d7c2693e3f47dd13fa5caa0789a74
+  subset: default
+  split: train
+  data_files:
+    - data/*.parquet
+  is_chat: true
+  query_fields:
+    - conversation_a

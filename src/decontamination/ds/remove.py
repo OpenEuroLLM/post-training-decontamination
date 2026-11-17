@@ -24,7 +24,7 @@ from huggingface_hub import HfApi, hf_hub_download
 from decontamination.util import read_dataset
 from decontamination.util import TypedDataFrame
 
-from .config import BenchmarkConfig, DatasetConfig, Result
+from .config import BenchmarkConfig, DatasetConfig, Result, expand_benchmarks, expand_datasets
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +58,9 @@ def validate_results(
             r.benchmark_path,
             r.benchmark_subset,
             r.benchmark_split,
+            tuple(r.benchmark_query_fields),
+            r.benchmark_is_chat,
+            r.benchmark_revision,
         )
         for r in results
     }
@@ -71,6 +74,9 @@ def validate_results(
                 bench.path,
                 bench.subset,
                 bench.split,
+                tuple(bench.query_fields),
+                bench.is_chat,
+                bench.revision,
             )
             if key not in result_keys:
                 missing.append(
@@ -92,6 +98,9 @@ def result_matches_benchmarks(r: Result, benchmarks: list[BenchmarkConfig]) -> b
         r.benchmark_path == b.path
         and r.benchmark_subset == b.subset
         and r.benchmark_split == b.split
+        and r.benchmark_query_fields == b.query_fields
+        and r.benchmark_is_chat == b.is_chat
+        and r.benchmark_revision == b.revision
         for b in benchmarks
     )
 
@@ -830,6 +839,8 @@ def remove(
     df_results = TypedDataFrame(df, Result)
     results = list(df_results)
 
+    datasets = expand_datasets(datasets)
+    benchmarks = expand_benchmarks(benchmarks)
     validate_results(results, datasets, benchmarks)
 
     os.makedirs(output_dir, exist_ok=True)

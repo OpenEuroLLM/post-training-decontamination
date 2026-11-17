@@ -1,4 +1,6 @@
-from dataclasses import dataclass
+from ast import literal_eval
+from dataclasses import dataclass, replace
+from itertools import product
 
 import pandas as pd
 
@@ -14,7 +16,7 @@ class DatasetConfig:
         display_name: A human-readable name for the dataset (optional).
         description: A description of the dataset (optional).
         path: The path to the dataset.
-        subset: The subset of the dataset (optional).
+        subset: A subset, a list of subsets, or null.
         split: The split of the dataset (e.g., "train", "test").
         messages_field: The field in the dataset that contains the text to be
                         indexed and searched (default: "messages").
@@ -30,7 +32,7 @@ class DatasetConfig:
     display_name: str | None
     description: str | None
     path: str
-    subset: str | None
+    subset: str | list[str | None] | None
     split: str
     messages_field: str = "messages"
     query_filter: tuple[str, str] = ("role", "user")
@@ -47,19 +49,56 @@ class BenchmarkConfig:
         display_name: A human-readable name for the benchmark.
         description: A description of the benchmark (optional).
         path: The path to the benchmark dataset.
-        subset: The subset of the benchmark dataset (optional).
-        split: The split of the benchmark dataset (e.g., "train", "test").
+        subset: A subset, a list of subsets, or null.
+        split: A split or a list of splits.
         data_files: The data files in the benchmark dataset to use for querying.
         query_fields: The fields in the benchmark dataset to use for querying.
+        is_chat: Extract user messages when true, use raw fields when false,
+                 or infer from the field value when null.
+        revision: Optional Hugging Face dataset revision.
     """
 
     display_name: str
     description: str | None
     path: str
-    subset: str | None
-    split: str
+    subset: str | list[str | None] | None
+    split: str | list[str]
     data_files: list[str] | None
     query_fields: list[str]
+    is_chat: bool | None = None
+    revision: str | None = None
+
+
+def _choices(value):
+    values = value if isinstance(value, list) else [value]
+    if not values or any(v is not None and (not isinstance(v, str) or not v.strip()) for v in values):
+        raise ValueError(f"Expected nonempty subset or split values, got {value!r}")
+    if len(values) != len(set(values)):
+        raise ValueError(f"Duplicate subset or split values: {value!r}")
+    return values
+
+
+def expand_datasets(datasets: list[DatasetConfig]) -> list[DatasetConfig]:
+    expanded = []
+    for dataset in datasets:
+        subsets = _choices(dataset.subset)
+        if len(subsets) > 1 and dataset.index_name:
+            raise ValueError("An explicit index_name requires a single dataset subset")
+        expanded.extend(replace(dataset, subset=subset) for subset in subsets)
+    return expanded
+
+
+def expand_benchmarks(benchmarks: list[BenchmarkConfig]) -> list[BenchmarkConfig]:
+    expanded = []
+    for benchmark in benchmarks:
+        splits = _choices(benchmark.split)
+        if None in splits:
+            raise ValueError("Benchmark splits must be strings")
+        expanded.extend(
+            replace(benchmark, subset=subset, split=split)
+            for subset, split in product(_choices(benchmark.subset), splits)
+        )
+    return expanded
 
 
 @dataclass
@@ -116,31 +155,35 @@ class Result(TypedRow["Result"]):
     match_threshold: float
 
     contaminated_ids: dict[int, set[int]]
+    benchmark_is_chat: bool | None = None
+    benchmark_revision: str | None = None
+    top_k: int | None = None
 
     def from_row(row: pd.Series) -> "Result":
         dataset_query_filter = row.pop("dataset_query_filter")
         dataset_query_filter = (
-            eval(dataset_query_filter)
+            literal_eval(dataset_query_filter)
             if isinstance(dataset_query_filter, str)
             else dataset_query_filter
         )
         benchmark_query_fields = row.pop("benchmark_query_fields")
         benchmark_query_fields = (
-            eval(benchmark_query_fields)
+            literal_eval(benchmark_query_fields)
             if isinstance(benchmark_query_fields, str)
             else benchmark_query_fields
         )
         contaminated_ids = row.pop("contaminated_ids")
         contaminated_ids = (
-            eval(contaminated_ids)
+            literal_eval(contaminated_ids)
             if isinstance(contaminated_ids, str)
             else contaminated_ids
         )
+        values = row.where(row.notna(), None).to_dict()
         return Result(
             dataset_query_filter=dataset_query_filter,
             benchmark_query_fields=benchmark_query_fields,
             contaminated_ids=contaminated_ids,
-            **row.to_dict(),
+            **values,
         )
 
     def is_same_setup(self, other: "Result") -> bool:
@@ -163,6 +206,9 @@ class Result(TypedRow["Result"]):
             and self.benchmark_subset == other.benchmark_subset
             and self.benchmark_split == other.benchmark_split
             and self.benchmark_query_fields == other.benchmark_query_fields
+            and self.benchmark_is_chat == other.benchmark_is_chat
+            and self.benchmark_revision == other.benchmark_revision
+            and self.top_k == other.top_k
             and self.ngram_size == other.ngram_size
             and self.match_threshold == other.match_threshold
         )
