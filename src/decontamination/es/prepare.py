@@ -3,7 +3,7 @@ from pathlib import Path
 
 from decontamination.util import run_command_streaming
 
-from .util import MOUNTS, select_image
+from .util import MOUNTS, resolve_image_arch, select_image
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def prepare(
     command = [
         "apptainer",
         "exec",
-        image,
+        resolve_image_arch(image),
         "cp",
         "-r",
         "/usr/share/elasticsearch/config/.",

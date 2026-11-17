@@ -30,6 +30,7 @@ def create_es_connection(
     host: str = "localhost",
     port: int = 9200,
     scheme: str = "http",
+    connections_per_node: int = 10,
 ) -> Elasticsearch:
     """
     Create a connection to an Elasticsearch instance.
@@ -38,8 +39,13 @@ def create_es_connection(
         host (str): The hostname of the Elasticsearch server.
         port (int): The port number of the Elasticsearch server.
         scheme (str): The connection scheme ("http" or "https").
+        connections_per_node: Maximum pooled connections to each node.
 
     Returns:
         Elasticsearch: An instance of the Elasticsearch client connected to the specified server.
     """
-    return Elasticsearch(f"{scheme}://{host}:{port}")
+    return Elasticsearch(
+        f"{scheme}://{host}:{port}",
+        request_timeout=120,
+        connections_per_node=connections_per_node,
+    )

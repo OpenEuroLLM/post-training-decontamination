@@ -8,7 +8,7 @@ from tqdm import tqdm
 from decontamination.util import NUM_PROCESSES, read_dataset as read_dataset_util
 from elasticsearch import Elasticsearch, helpers
 
-from .config import DatasetConfig
+from .config import DatasetConfig, expand_datasets
 from .util import build_default_index_name, create_es_connection
 
 log = logging.getLogger(__name__)
@@ -140,7 +140,7 @@ def index(
     """
     es = create_es_connection()
 
-    for dataset in datasets:
+    for dataset in expand_datasets(datasets):
         if not dataset.index_name:
             dataset.index_name = build_default_index_name(
                 dataset.path, dataset.subset, dataset.split
@@ -164,3 +164,4 @@ def index(
             dataset.index_name,
             batch_size,
         )
+        es.indices.refresh(index=dataset.index_name)

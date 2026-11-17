@@ -64,6 +64,12 @@ def _cast_value(target_type, value):
     if value is None or value is inspect._empty:
         return value
 
+    if typing.get_origin(target_type) in (typing.Union, types.UnionType):
+        for option in typing.get_args(target_type):
+            origin = typing.get_origin(option) or option
+            if isinstance(origin, type) and isinstance(value, origin):
+                return _cast_value(option, value)
+
     base_type = get_base_type(target_type)
     origin = typing.get_origin(base_type) or base_type
 

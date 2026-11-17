@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 
 from decontamination.util import run_command_streaming
+from .util import resolve_image_arch
 
 log = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ def build(
     Returns:
         The path to the built Apptainer image.
     """
+    image = resolve_image_arch(image)
     log.info(f"Building Apptainer image from {image}:")
     apptainer_image_name = image.split("/")[-1].replace(":", "-") + ".sif"
 

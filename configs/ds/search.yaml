@@ -3,4 +3,8 @@ benchmarks: !include ../benchmarks.yaml
 ngram_size: 8
 match_threshold: 0.5
 top_k: 10
+search_batch_size: 64
+max_concurrent_searches: null
+prompt_batch_size: 1
+requests_in_flight: 1
 output_dir: outputs

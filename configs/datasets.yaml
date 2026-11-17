@@ -9,3 +9,57 @@
     - user
   query_field: content
   index_name: null
+
+- display_name: Dolci-Think-SFT-32B
+  description: "Source of the translated Dolci Think dataset."
+  path: allenai/Dolci-Think-SFT-32B
+  subset: default
+  split: train
+
+- display_name: SFT-Excellent
+  description: "OpenEuroLLM curated SFT pool."
+  path: openeurollm/OpenEuroLLM-Excellent-SFT
+  subset: default
+  split: train
+
+- display_name: Dolci-Think-SFT-translated
+  description: "Translated Dolci Think SFT."
+  path: openeurollm/Dolci-Think-SFT-translated
+  subset:
+    - cs
+    - de
+    - el
+    - es
+    - fi
+    - fr
+    - it
+    - nl
+    - pl
+    - ro
+    - sv
+    - uk
+  split: train
+
+- display_name: Dolci-Instruct-SFT-translated
+  description: "Translated Dolci Instruct SFT."
+  path: openeurollm/Dolci-Instruct-SFT-translated
+  subset:
+    - cs
+    - de
+    - el
+    - es
+    - fi
+    - fr
+    - it
+    - nl
+    - pl
+    - ro
+    - sv
+    - uk
+  split: train
+
+- display_name: EuroMultiSynth-Instruct
+  description: "Synthetic multilingual SFT pool."
+  path: openeurollm/EuroMultiSynth-Instruct
+  subset: all
+  split: train
