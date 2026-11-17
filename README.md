@@ -52,7 +52,7 @@ uv run ds --install-completion [bash|zsh|fish]
 
 # Usage
 
-Run the commands below from the repository root so the CLI can find the default configs.
+Run the commands below from the repository root so the CLI can find the default config files.
 
 ## 1. Run `elasticsearch` container
 
