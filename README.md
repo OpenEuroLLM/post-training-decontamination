@@ -9,13 +9,13 @@ An n-gram-based decontamination tool for LLM post-training datasets.
 ```bash
 uv pip install https://github.com/OpenEuroLLM/post-training-decontamination.git
 
-es build         # Build an Elasticsearch apptainer image
-es prepare       # Prepare the image mounts and single-node configuration
-es run           # Run the Elasticsearch container
+uv run es build         # Build an Elasticsearch apptainer image
+uv run es prepare       # Prepare the image mounts and single-node configuration
+uv run es run           # Run the Elasticsearch container
 
-ds index         # Index datasets defined in `configs/datasets.yaml`
-ds search        # Find overlap with benchmarks defined in `configs/benchmarks.yaml`
-ds remove [--huggingface-id <huggingface-id>]  # Decontaminate and (optionally) push to HF
+uv run ds index         # Index datasets defined in `configs/datasets.yaml`
+uv run ds search        # Find overlap with benchmarks defined in `configs/benchmarks.yaml`
+uv run ds remove [--huggingface-id <huggingface-id>]  # Decontaminate and (optionally) push to HF
 ```
 
 --------------------
@@ -32,8 +32,8 @@ uv pip install https://github.com/OpenEuroLLM/post-training-decontamination.git
 
 All commands can be configured using either:
 1. command arguments. Check
-  - `es [subcommand] --help`
-  - `ds [subcommand] --help`
+  - `uv run es [subcommand] --help`
+  - `uv run ds [subcommand] --help`
 2. a YAML config file with the `--config <config_file>` argument. Check
   - `configs/es/build.yaml`
   - `configs/es/prepare.yaml`
@@ -46,8 +46,8 @@ All commands can be configured using either:
 
 To enable autocompletion for the CLI, run the following commands:
 ```bash
-es --install-completion [bash|zsh|fish]
-ds --install-completion [bash|zsh|fish]
+uv run es --install-completion [bash|zsh|fish]
+uv run ds --install-completion [bash|zsh|fish]
 ```
 
 # Usage
@@ -57,9 +57,9 @@ Run the commands below from the repository root so the CLI can find the default 
 ## 1. Run `elasticsearch` container
 
 ```bash
-es build         # Build an Elasticsearch apptainer image
-es prepare       # Prepare the image mounts and single-node configuration
-es run           # Run the Elasticsearch container
+uv run es build         # Build an Elasticsearch apptainer image
+uv run es prepare       # Prepare the image mounts and single-node configuration
+uv run es run           # Run the Elasticsearch container
 ```
 
 Elasticsearch is used as a search engine to efficiently index the training datasets and perform n-gram search for overlap with evaluation benchmarks.
@@ -69,7 +69,7 @@ Image names in the Elasticsearch configs can use `{auto-arch}` for the OCI archi
 ## 2. Index datasets into Elasticsearch
 
 ```bash
-ds index
+uv run ds index
 ```
 
 The datasets to be indexed are specified in `configs/datasets.yaml`.
@@ -87,7 +87,7 @@ Set `index_name` only for an entry with a single subset.
 ## 3. Find contaminated samples
 
 ```bash
-ds search
+uv run ds search
 ```
 
 The benchmarks to search are specified in `configs/benchmarks.yaml`.
@@ -120,7 +120,7 @@ cap concurrent sub-searches per batch, or leave it `null` to use Elasticsearch's
 ## 4. Remove contaminated samples
 
 ```bash
-ds remove [--huggingface-id <huggingface-id>]
+uv run ds remove [--huggingface-id <huggingface-id>]
 ```
 
 The decontaminated dataset is saved to
