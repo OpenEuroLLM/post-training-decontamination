@@ -1,4 +1,25 @@
+import os
 from pathlib import Path
+
+from decontamination.util import Architecture
+
+
+def resolve_image_arch(image: str) -> str:
+    if "{auto-arch}" not in image:
+        return image
+    return image.replace("{auto-arch}", Architecture.from_platform().docker_image_suffix)
+
+
+def resolve_jvm_cpus(jvm_cpus: int | None) -> int:
+    if jvm_cpus is None:
+        if hasattr(os, "sched_getaffinity"):
+            jvm_cpus = len(os.sched_getaffinity(0))
+        else:
+            jvm_cpus = os.cpu_count() or 1
+    if jvm_cpus < 1:
+        raise ValueError("jvm_cpus must be positive")
+    return jvm_cpus
+
 
 MOUNTS = {
     Path("elasticsearch") / folder: Path("/usr/share/elasticsearch") / folder
