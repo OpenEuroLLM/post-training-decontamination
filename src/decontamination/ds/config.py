@@ -155,9 +155,9 @@ class Result(TypedRow["Result"]):
     match_threshold: float
 
     contaminated_ids: dict[int, set[int]]
-    benchmark_is_chat: bool | None = None
-    benchmark_revision: str | None = None
-    top_k: int | None = None
+    benchmark_is_chat: bool | None
+    benchmark_revision: str | None
+    top_k: int
 
     def from_row(row: pd.Series) -> "Result":
         values = {

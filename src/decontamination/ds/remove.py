@@ -205,17 +205,8 @@ def save_subset_for_hub_config_map(
 def load_existing_decontaminated_local(
     output_path: Path,
 ) -> dict[str, DatasetDict] | None:
-    """
-    Load existing decontaminated data: one ``DatasetDict`` per Hub config subdirectory.
-    Legacy single-folder layout (``dataset_dict.json`` at output root) is not loaded.
-    """
+    """Load one DatasetDict per Hub config subdirectory."""
     if not output_path.exists():
-        return None
-    if (output_path / "dataset_dict.json").is_file():
-        log.debug(
-            "Ignoring legacy decontaminated layout at %s (expected per-config subdirs)",
-            output_path,
-        )
         return None
     subdirs = sorted(
         p for p in output_path.iterdir() if p.is_dir() and not p.name.startswith(".")
