@@ -1,55 +1,149 @@
 # Decontamination
 
-Find and remove benchmark overlap in post-training datasets using Elasticsearch and n-gram matching.
+An n-gram-based decontamination tool for LLM post-training datasets.
 
-## Runbook
+--------------------
 
-Run these commands from the repository root. You need Python 3.14+, uv, and Apptainer.
+# TL;DR
 
-1. Install the dependencies.
+```bash
+uv pip install https://github.com/OpenEuroLLM/post-training-decontamination.git
 
-   ```bash
-   uv sync --frozen
-   ```
+es build         # Build an Elasticsearch apptainer image
+es prepare       # Prepare the image mounts and single-node configuration
+es run           # Run the Elasticsearch container
 
-2. Edit [datasets.yaml](configs/datasets.yaml) and [benchmarks.yaml](configs/benchmarks.yaml) to select the training data and evaluation slices.
+ds index         # Index datasets defined in `configs/datasets.yaml`
+ds search        # Find overlap with benchmarks defined in `configs/benchmarks.yaml`
+ds remove [--huggingface-id <huggingface-id>]  # Decontaminate and (optionally) push to HF
+```
 
-3. Build and start Elasticsearch. Leave it running in this terminal.
+--------------------
 
-   ```bash
-   uv run es build
-   uv run es prepare
-   uv run es run
-   ```
+# Installation
 
-4. In a second terminal, index the datasets, run the search, and apply the exclusions.
+```bash
+uv pip install https://github.com/OpenEuroLLM/post-training-decontamination.git
+```
 
-   ```bash
-   uv run ds index
-   uv run ds search
-   uv run ds remove
-   ```
-
-   Review `outputs/results.csv` for counts by dataset and benchmark slice. Filtered datasets are written under `outputs/`. To publish the filtered data, pass `--huggingface-id <namespace>` to `ds remove`.
+# CLI
 
 ## Configuration
 
-Every subcommand accepts `--config <file>` and lists its options with `--help`. Defaults live in [configs/ds](configs/ds/) and [configs/es](configs/es/).
+All commands can be configured using either:
+1. command arguments. Check
+  - `es [subcommand] --help`
+  - `ds [subcommand] --help`
+2. a YAML config file with the `--config <config_file>` argument. Check
+  - `configs/es/build.yaml`
+  - `configs/es/prepare.yaml`
+  - `configs/es/run.yaml`
+  - `configs/ds/index.yaml`
+  - `configs/ds/search.yaml`
+  - `configs/ds/remove.yaml`
 
-| File | What to set |
-|---|---|
-| [datasets.yaml](configs/datasets.yaml) | Set `path`, `subset`, and `split`. A subset can be a scalar, a list, or `null`. Each selected subset is indexed and filtered separately. Set an explicit `index_name` only for a single subset. |
-| [benchmarks.yaml](configs/benchmarks.yaml) | Set `path`, `subset`, `split`, and `query_fields`. Lists of subsets and splits expand into every combination. Set `revision` to pin a Hub revision. Use `is_chat: true` to extract user turns, `false` to search raw text, or `null` to detect chat records automatically. |
-| [search.yaml](configs/ds/search.yaml) | The default policy uses 8-grams, up to 10 hits per n-gram, and flags rows at benchmark token coverage strictly above 0.5. Set a separate `output_dir` for each policy and point removal at its `results_path`. |
-| [run.yaml](configs/es/run.yaml) | Set `jvm_cpus` to override the JVM processor count. The default uses process CPU affinity. Elasticsearch image names can use `{auto-arch}` for the OCI architecture suffix. |
+## Autocompletion
 
-Elasticsearch search controls in `configs/ds/search.yaml`:
+To enable autocompletion for the CLI, run the following commands:
+```bash
+es --install-completion [bash|zsh|fish]
+ds --install-completion [bash|zsh|fish]
+```
 
-| Setting | Default | Controls |
-|---|---:|---|
-| `search_batch_size` | 64 | N-gram queries per HTTP request. Use 1 for individual requests. |
-| `max_concurrent_searches` | `null` | Concurrent sub-searches per batch. Null uses the Elasticsearch default. |
-| `prompt_batch_size` | 1 | Prompt rows that can share an HTTP batch. |
-| `requests_in_flight` | 1 | Concurrent HTTP search requests. |
+# Usage
 
-The matcher is adapted from [Ai2 Open Instruct](https://github.com/allenai/open-instruct/tree/main/decontamination). This project is licensed under [Apache 2.0](LICENSE).
+Run the commands below from the repository root so the CLI can find the default configs.
+
+## 1. Run `elasticsearch` container
+
+```bash
+es build         # Build an Elasticsearch apptainer image
+es prepare       # Prepare the image mounts and single-node configuration
+es run           # Run the Elasticsearch container
+```
+
+Elasticsearch is used as a search engine to efficiently index the training datasets and perform n-gram search for overlap with evaluation benchmarks.
+Set `jvm_cpus` in `configs/es/run.yaml` to override the processor count, which defaults to CPU affinity.
+Image names in the Elasticsearch configs can use `{auto-arch}` for the OCI architecture suffix.
+
+## 2. Index datasets into Elasticsearch
+
+```bash
+ds index
+```
+
+The datasets to be indexed are specified in `configs/datasets.yaml`.
+`subset` accepts a name, a list of names, or `null`. Each selected subset is indexed and filtered separately.
+Set `index_name` only for an entry with a single subset.
+
+```yaml
+- ...
+  path: <dataset_path>
+  subset: <subset>
+  split: <split>
+  ...
+```
+
+## 3. Find contaminated samples
+
+```bash
+ds search
+```
+
+The benchmarks to search are specified in `configs/benchmarks.yaml`.
+`subset` and `split` each accept a scalar or a list. The search runs every subset and split combination.
+Set `revision` to pin the Hub version. Use `is_chat: true` to extract user turns,
+`false` to search raw fields, or `null` to detect chat records automatically.
+
+```yaml
+- ...
+  path: <benchmark_path>
+  subset:
+    - en
+    - fr
+  split: test
+  query_fields:
+    - prompt
+  is_chat: false
+  revision: <commit_sha>
+```
+
+The search results are saved to `outputs/results.csv`, with a row for each dataset and benchmark slice.
+The default policy uses 8-grams and up to 10 hits per n-gram. A row is flagged when shared
+n-grams cover strictly more than half the benchmark prompt's tokens.
+
+In `configs/ds/search.yaml`, `search_batch_size` controls n-gram queries per HTTP request
+(use 1 for individual requests), `prompt_batch_size` controls how many prompts can share a batch,
+and `requests_in_flight` limits concurrent HTTP requests. Set `max_concurrent_searches` to
+cap concurrent sub-searches per batch, or leave it `null` to use Elasticsearch's default.
+
+## 4. Remove contaminated samples
+
+```bash
+ds remove [--huggingface-id <huggingface-id>]
+```
+
+The decontaminated dataset is saved to
+- `outputs/<dataset_name>-decontaminated/` locally, and
+- `<huggingface-id>/<dataset_name>-decontaminated/` on Hugging Face (if `--huggingface-id` is provided).
+
+If you changed the search output directory, set `results_path` in `configs/ds/remove.yaml` to its `results.csv`.
+
+--------------------
+
+# Command abbreviations
+
+- `es` -> `elasticsearch`
+- `ds` -> `datasets`
+
+--------------------
+
+# Acknowledgements
+
+The decontamination scripts in this project are adapted from [allenai/open-instruct](https://github.com/allenai/open-instruct), AllenAI's post-training codebase. See their [Contamination checks](https://github.com/allenai/open-instruct#contamination-checks) section for the original implementation.
+
+--------------------
+
+# License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
