@@ -25,6 +25,7 @@ from decontamination.util import read_dataset
 from decontamination.util import TypedDataFrame
 
 from .config import BenchmarkConfig, DatasetConfig, Result, expand_benchmarks, expand_datasets
+from .match_csv import load_training_ids
 
 log = logging.getLogger(__name__)
 
@@ -141,12 +142,13 @@ def make_contamination_stat(
 
 def collect_contaminated_ids(
     results: list[Result],
+    training_ids: dict[int, set[int]],
     path: str,
     subset: str | None,
     split: str,
     benchmarks: list[BenchmarkConfig],
 ) -> set[int]:
-    """Union contaminated_ids keys for given (path, subset, split) across matching benchmarks."""
+    """Union training row IDs across matching benchmark scans."""
     ids_to_remove: set[int] = set()
     for r in results:
         if (
@@ -155,7 +157,7 @@ def collect_contaminated_ids(
             and r.dataset_split == split
             and result_matches_benchmarks(r, benchmarks)
         ):
-            ids_to_remove.update(r.contaminated_ids.keys())
+            ids_to_remove.update(training_ids.get(r.id, ()))
     return ids_to_remove
 
 
@@ -659,6 +661,7 @@ def _result_subsets_for_config(
 
 def ensure_stats_for_merged(
     results: list[Result],
+    training_ids: dict[int, set[int]],
     path: str,
     benchmarks: list[BenchmarkConfig],
     merged_by_config: dict[str, DatasetDict],
@@ -680,7 +683,7 @@ def ensure_stats_for_merged(
             if r is None or (resolved_subset, split) in stats_keys:
                 continue
             ids_to_remove = collect_contaminated_ids(
-                results, path, resolved_subset, split, benchmarks
+                results, training_ids, path, resolved_subset, split, benchmarks
             )
             decontamination_stats.append(
                 make_contamination_stat(
@@ -800,14 +803,14 @@ def save_multi_config_replacing(
 def remove(
     datasets: list[DatasetConfig],
     benchmarks: list[BenchmarkConfig],
-    results_path: Path = Path("outputs/results.csv"),
+    summary_path: Path = Path("outputs/summary.csv"),
     output_dir: Path = Path("outputs"),
     huggingface_id: str | None = None,
 ) -> None:
     """
     Remove contaminated examples from training datasets based on search results.
 
-    Reads results from the CSV, validates all dataset-benchmark pairs exist,
+    Reads the summary and matches CSVs, validates all dataset-benchmark pairs exist,
     filters out contaminated rows, merges subsets/splits of the same main dataset
     (one Hub config per subset, split names as in the source dataset),
     saves locally under per-config subdirectories, and optionally pushes to Hugging Face.
@@ -815,20 +818,26 @@ def remove(
     Args:
         datasets: List of DatasetConfig specifying datasets to decontaminate.
         benchmarks: List of BenchmarkConfig specifying benchmarks used for search.
-        results_path: Path to results.csv (default: outputs/results.csv).
+        summary_path: Path to summary.csv (default: outputs/summary.csv).
         output_dir: Directory for local output (default: outputs).
         huggingface_id: Optional HF namespace for upload (e.g. 'myorg').
     """
-    if not results_path.exists():
+    if not summary_path.exists():
         log.error(
             "Results file not found: %s. Run 'ds index' and 'ds search' first.",
-            results_path,
+            summary_path,
         )
         sys.exit(1)
 
-    df = pd.read_csv(results_path)
+    matches_path = summary_path.with_name("matches.csv")
+    if not matches_path.exists():
+        log.error("Matches file not found: %s. Run 'ds search' first.", matches_path)
+        sys.exit(1)
+
+    df = pd.read_csv(summary_path)
     df_results = TypedDataFrame(df, Result)
     results = list(df_results)
+    training_ids = load_training_ids(matches_path, {int(r.id) for r in results})
 
     datasets = expand_datasets(datasets)
     benchmarks = expand_benchmarks(benchmarks)
@@ -869,7 +878,7 @@ def remove(
                     ds_config.split,
                 )
                 ids_to_remove = collect_contaminated_ids(
-                    results, path, ds_config.subset, ds_config.split, benchmarks
+                    results, training_ids, path, ds_config.subset, ds_config.split, benchmarks
                 )
                 r = find_matching_result(
                     results, path, ds_config.subset, ds_config.split, benchmarks
@@ -887,6 +896,7 @@ def remove(
 
             ids_to_remove = collect_contaminated_ids(
                 results,
+                training_ids,
                 path,
                 ds_config.subset,
                 ds_config.split,
@@ -930,6 +940,7 @@ def remove(
 
         ensure_stats_for_merged(
             results,
+            training_ids,
             path,
             benchmarks,
             merged_by_config,

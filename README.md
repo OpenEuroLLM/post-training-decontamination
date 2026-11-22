@@ -108,7 +108,11 @@ Set `revision` to pin the Hub version. Use `is_chat: true` to extract user turns
   revision: <commit_sha>
 ```
 
-The search results are saved to `outputs/results.csv`, with a row for each dataset and benchmark slice.
+The search results are divided into two CSV files:
+1. `summary.csv`: a summary that includes the used configuration, the number of contaminated training rows, etc., for each training-benchmark pair. A training dataset may have multiple pairs, for each data (subset, split) pair has its own entry.
+
+2. `matches.csv`: the ids of the specific benchmark examples that matched with each training example.
+
 The default policy uses 8-grams and up to 10 hits per n-gram. A row is flagged when shared
 n-grams cover strictly more than half the benchmark prompt's tokens.
 
@@ -127,7 +131,8 @@ The decontaminated dataset is saved to
 - `outputs/<dataset_name>-decontaminated/` locally, and
 - `<huggingface-id>/<dataset_name>-decontaminated/` on Hugging Face (if `--huggingface-id` is provided).
 
-If you changed the search output directory, set `results_path` in `configs/ds/remove.yaml` to its `results.csv`.
+If you changed the search output directory, set `summary_path` in `configs/ds/remove.yaml` to its `summary.csv`.
+The remove command reads `matches.csv` from the same directory.
 
 --------------------
 

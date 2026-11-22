@@ -128,10 +128,10 @@ class Result(TypedRow["Result"]):
                                         the benchmark.
         ngram_size: The n-gram size used for matching.
         match_threshold: The similarity threshold used for matching.
-        contaminated_ids: A dictionary mapping document IDs in the dataset to sets
-                         of matching document IDs in the benchmark.
+        id: Identifier for this scan in summary.csv.
     """
 
+    id: int
     dataset_path: str
     dataset_subset: str | None
     dataset_split: str
@@ -154,7 +154,6 @@ class Result(TypedRow["Result"]):
     ngram_size: int
     match_threshold: float
 
-    contaminated_ids: dict[int, set[int]]
     benchmark_is_chat: bool | None
     benchmark_revision: str | None
     top_k: int
@@ -176,16 +175,9 @@ class Result(TypedRow["Result"]):
             if isinstance(benchmark_query_fields, str)
             else benchmark_query_fields
         )
-        contaminated_ids = values.pop("contaminated_ids")
-        contaminated_ids = (
-            literal_eval(contaminated_ids)
-            if isinstance(contaminated_ids, str)
-            else contaminated_ids
-        )
         return Result(
             dataset_query_filter=dataset_query_filter,
             benchmark_query_fields=benchmark_query_fields,
-            contaminated_ids=contaminated_ids,
             **values,
         )
 

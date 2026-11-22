@@ -1,7 +1,9 @@
+import csv
 import json
 import logging
 import os
 from collections import defaultdict, deque
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from itertools import batched, islice
@@ -17,6 +19,7 @@ from decontamination.util import bold, TypedDataFrame
 from elasticsearch import Elasticsearch
 
 from .config import BenchmarkConfig, DatasetConfig, Result, expand_benchmarks, expand_datasets
+from .match_csv import prepare_matches
 from .util import build_default_index_name, create_es_connection
 
 log = logging.getLogger(__name__)
@@ -83,9 +86,9 @@ def _search_hits(
 
 
 def _query_groups(rows, fields, model, ngram_size, prompt_batch_size):
-    for group in batched(rows, prompt_batch_size):
+    for group in batched(enumerate(rows), prompt_batch_size):
         prepared = []
-        for row in group:
+        for benchmark_row_id, row in group:
             strings = [row[field] for field in fields]
             if any(text is None for text in strings):
                 continue
@@ -93,7 +96,7 @@ def _query_groups(rows, fields, model, ngram_size, prompt_batch_size):
             for text in strings:
                 doc = model.make_doc(text)
                 queries.append(([token.text for token in doc], get_ngram_mapping(doc, ngram_size)))
-            prepared.append((strings, queries))
+            prepared.append((benchmark_row_id, strings, queries))
         yield prepared
 
 
@@ -109,6 +112,7 @@ def ngram_match(
     prompt_batch_size: int = 1,
     requests_in_flight: int = 1,
     collect_details: bool = True,
+    on_match_scores: Callable[[int, dict[int, float]], None] | None = None,
 ) -> tuple[list[float], list[dict], dict[int, float]]:
     if requests_in_flight < 1:
         raise ValueError("requests_in_flight must be positive")
@@ -132,8 +136,8 @@ def ngram_match(
         for group in _query_groups(rows, fields, spacy_model, ngram_size, prompt_batch_size):
             group_hits = None
             if prompt_batch_size > 1:
-                group_hits = search_hits(ngram for _, queries in group for _, mapping in queries for ngram in mapping)
-            for query_strings, queries in group:
+                group_hits = search_hits(ngram for _, _, queries in group for _, mapping in queries for ngram in mapping)
+            for benchmark_row_id, query_strings, queries in group:
                 query_string_match_scores = []
                 query_string_match_tokens = defaultdict(list)
                 matching_doc_ids = set()
@@ -178,11 +182,16 @@ def ngram_match(
                     }
                     match_score = max(aggregated_match_scores.values())
                     match_scores.append(match_score)
+                    row_scores: dict[int, float] = {}
                     for doc_id, score in aggregated_match_scores.items():
                         original_id = doc_id_source_mapping[doc_id]["original_id"]
                         max_train_match_scores[original_id] = max(
                             score, max_train_match_scores.get(original_id, 0.0)
                         )
+                        if on_match_scores is not None:
+                            row_scores[original_id] = max(score, row_scores.get(original_id, 0.0))
+                    if on_match_scores is not None:
+                        on_match_scores(benchmark_row_id, row_scores)
                     if collect_details:
                         sorted_matches = sorted(
                             aggregated_match_scores.items(), key=lambda item: item[1], reverse=True
@@ -316,11 +325,18 @@ def search(
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
+    summary_path = output_dir / "summary.csv"
+    matches_path = output_dir / "matches.csv"
     df_results = (
-        TypedDataFrame(pd.read_csv(output_dir / "results.csv"), Result)
-        if (output_dir / "results.csv").exists()
+        TypedDataFrame(pd.read_csv(summary_path), Result)
+        if summary_path.exists()
         else TypedDataFrame.new(Result)
     )
+
+    summary_ids = {int(result.id) for result in df_results}
+    prepare_matches(matches_path, summary_ids)
+    next_id = max(summary_ids, default=-1) + 1
+    summary_tmp = summary_path.with_suffix(".tmp")
 
     es = create_es_connection(connections_per_node=max(10, requests_in_flight))
 
@@ -351,6 +367,7 @@ def search(
             )
 
             result = Result(
+                id=next_id,
                 dataset_path=dataset.path,
                 dataset_subset=dataset.subset,
                 dataset_split=dataset.split,
@@ -371,7 +388,6 @@ def search(
                 ngram_size=ngram_size,
                 match_threshold=match_threshold,
                 top_k=top_k,
-                contaminated_ids={},
             )
 
             if any(result.is_same_setup(other) for other in df_results):
@@ -392,19 +408,30 @@ def search(
             )
             result.benchmark_num_docs = len(benchmark_dataset)
 
-            match_scores, _, train_id_scores = ngram_match(
-                es,
-                dataset.index_name,
-                benchmark_dataset,
-                benchmark.query_fields,
-                ngram_size,
-                top_k,
-                search_batch_size=search_batch_size,
-                max_concurrent_searches=max_concurrent_searches,
-                prompt_batch_size=prompt_batch_size,
-                requests_in_flight=requests_in_flight,
-                collect_details=False,
-            )
+            with matches_path.open("a", newline="") as matches_file:
+                writer = csv.writer(matches_file)
+
+                def write_pairs(benchmark_row_id: int, row_scores: dict[int, float]) -> None:
+                    writer.writerows(
+                        (result.id, row_id, benchmark_row_id)
+                        for row_id, score in sorted(row_scores.items())
+                        if score > match_threshold
+                    )
+
+                match_scores, _, train_id_scores = ngram_match(
+                    es,
+                    dataset.index_name,
+                    benchmark_dataset,
+                    benchmark.query_fields,
+                    ngram_size,
+                    top_k,
+                    search_batch_size=search_batch_size,
+                    max_concurrent_searches=max_concurrent_searches,
+                    prompt_batch_size=prompt_batch_size,
+                    requests_in_flight=requests_in_flight,
+                    collect_details=False,
+                    on_match_scores=write_pairs,
+                )
             dataset_contaminated_docs = list(
                 _id for _id, score in train_id_scores.items() if score > match_threshold
             )
@@ -412,7 +439,6 @@ def search(
             result.dataset_contamination_fraction = (
                 len(dataset_contaminated_docs) / dataset_num_docs if dataset_num_docs else 0.0
             )
-            result.contaminated_ids = {id: set() for id in dataset_contaminated_docs}
             result.benchmark_num_contaminated_docs = len(
                 [s for s in match_scores if s > match_threshold]
             )
@@ -437,7 +463,9 @@ def search(
             log.info("-" * 60)
 
             df_results.add(result)
-            df_results.df.to_csv(output_dir / "results.csv", index=False)
+            df_results.df.to_csv(summary_tmp, index=False)
+            summary_tmp.replace(summary_path)
+            next_id += 1
 
         if dataset != datasets[-1]:
             log.info("-" * 80)

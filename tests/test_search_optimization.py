@@ -77,6 +77,25 @@ class SearchOptimizationTest(unittest.TestCase):
             ngram_match(*arguments, collect_details=False), (scores, [], row_scores)
         )
 
+    @patch("decontamination.ds.search.spacy.load")
+    def test_pair_scores_deduplicate_original_ids_and_keep_benchmark_positions(self, load):
+        import spacy
+
+        load.return_value = spacy.blank("en")
+        es = Mock()
+        es.search.return_value = {
+            "hits": {"hits": [
+                {"_id": "a", "_source": {"original_id": 7}},
+                {"_id": "b", "_source": {"original_id": 7}},
+            ]},
+        }
+        callback = Mock()
+        rows = [{"text": "one two"}, {"text": None}, {"text": "three four"}]
+        ngram_match(es, "index", rows, ["text"], 2, 10, prompt_batch_size=3,
+                    collect_details=False, on_match_scores=callback)
+        self.assertEqual([call.args for call in callback.call_args_list],
+                         [(0, {7: 1.0}), (2, {7: 1.0})])
+
     def test_partial_search_fails(self):
         es = Mock()
         es.msearch.return_value = {"responses": [{"error": "failure"}]}
